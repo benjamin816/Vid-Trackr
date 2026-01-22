@@ -17,18 +17,21 @@ import {
   AlertCircle,
   HelpCircle,
   Globe,
-  Settings
+  Settings,
+  Copy
 } from 'lucide-react';
-import { VideoCard, ViewMode, WorkflowStage, FunnelStage } from './types';
-import KanbanBoard from './components/KanbanBoard';
-import CalendarView from './components/CalendarView';
-import ArchiveView from './components/ArchiveView';
-import TrashView from './components/TrashView';
-import IdeaInput from './components/IdeaInput';
-import CardModal from './components/CardModal';
+import { VideoCard, ViewMode, WorkflowStage, FunnelStage } from './types.ts';
+import KanbanBoard from './components/KanbanBoard.tsx';
+import CalendarView from './components/CalendarView.tsx';
+import ArchiveView from './components/ArchiveView.tsx';
+import TrashView from './components/TrashView.tsx';
+import IdeaInput from './components/IdeaInput.tsx';
+import CardModal from './components/CardModal.tsx';
 
 /**
  * CLIENT ID CONFIGURATION
+ * Note: If you receive a 400 error, ensure your Google Cloud Console project
+ * has the "Authorized JavaScript Origins" set to exactly: https://benjamin816.github.io
  */
 const CLIENT_ID = "979572069887-6c96876re4v9udofbpqbfmqjru2q91q3.apps.googleusercontent.com";
 
@@ -93,29 +96,45 @@ const App: React.FC = () => {
 
     const initGapi = async () => {
       try {
-        // @ts-ignore
-        gapi.load('client', async () => {
+        // Wait for gapi and google (GIS) to be available on window
+        const checkLibraries = setInterval(() => {
           // @ts-ignore
-          await gapi.client.init({
-            discoveryDocs: [DISCOVERY_DOC],
-          });
-          setIsGapiLoaded(true);
-        });
+          if (window.gapi && window.google && window.google.accounts) {
+            clearInterval(checkLibraries);
+            setupGapi();
+          }
+        }, 100);
 
-        // @ts-ignore
-        tokenClientRef.current = google.accounts.oauth2.initTokenClient({
-          client_id: CLIENT_ID,
-          scope: SCOPES,
-          callback: async (response: any) => {
-            if (response.error !== undefined) {
-              setSyncStatus('error');
-              return;
+        const setupGapi = () => {
+          // @ts-ignore
+          gapi.load('client', async () => {
+            try {
+              // @ts-ignore
+              await gapi.client.init({
+                discoveryDocs: [DISCOVERY_DOC],
+              });
+              setIsGapiLoaded(true);
+            } catch (initErr) {
+              console.error("GAPI Client Init Error:", initErr);
             }
-            await handleSyncWithDrive();
-          },
-        });
+          });
+
+          // @ts-ignore
+          tokenClientRef.current = google.accounts.oauth2.initTokenClient({
+            client_id: CLIENT_ID,
+            scope: SCOPES,
+            callback: async (response: any) => {
+              if (response.error !== undefined) {
+                console.error("GIS Auth Error:", response);
+                setSyncStatus('error');
+                return;
+              }
+              await handleSyncWithDrive();
+            },
+          });
+        };
       } catch (err) {
-        console.error("GAPI initialization failed:", err);
+        console.error("GAPI initialization sequence failed:", err);
       }
     };
 
@@ -139,6 +158,10 @@ const App: React.FC = () => {
   }, [cards, syncStatus]);
 
   const handleSyncWithDrive = async () => {
+    if (!isGapiLoaded) {
+      setSyncStatus('error');
+      return;
+    }
     setSyncStatus('connecting');
     try {
       // @ts-ignore
@@ -228,6 +251,8 @@ const App: React.FC = () => {
     }
     if (tokenClientRef.current) {
       tokenClientRef.current.requestAccessToken({ prompt: 'consent' });
+    } else {
+      alert("Google Identity Services not initialized. Please check your internet connection.");
     }
   };
 
@@ -282,7 +307,7 @@ const App: React.FC = () => {
             <Sparkles size={24} />
           </div>
           <div>
-            <h1 className="font-bold text-lg tracking-tight">Video Funnel</h1>
+            <h1 className="font-bold text-lg tracking-tight">Vid Trackr</h1>
             <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest leading-none">Production HQ</p>
           </div>
         </div>
@@ -322,24 +347,31 @@ const App: React.FC = () => {
               </span>
             </button>
             
-            {(syncStatus === 'error' || syncStatus === 'unauthorized' || syncStatus === 'disconnected') && (
-              <div className="absolute top-full right-0 mt-2 w-72 bg-white p-4 rounded-xl shadow-2xl border border-slate-200 z-50 invisible group-hover:visible transition-all">
-                <p className="text-xs font-bold text-indigo-600 mb-2 flex items-center gap-2"><Globe size={14} /> Security Whitelist</p>
+            <div className="absolute top-full right-0 mt-2 w-72 bg-white p-4 rounded-xl shadow-2xl border border-slate-200 z-50 invisible group-hover:visible transition-all">
+                <p className="text-xs font-bold text-indigo-600 mb-2 flex items-center gap-2"><Globe size={14} /> OAuth Diagnostic</p>
                 <p className="text-[10px] leading-relaxed text-slate-500 mb-3">
-                  Google blocks sign-ins unless your URL is whitelisted in your Cloud Console.
+                  Google blocks requests if the Origin/Redirect doesn't match EXACTLY. Copy these to your Console:
                 </p>
-                <div className="space-y-2">
+                <div className="space-y-3">
                    <div>
                     <label className="text-[8px] font-bold text-slate-400 uppercase">Authorized Origin:</label>
-                    <code className="block bg-slate-100 p-1 rounded text-[9px] break-all font-mono select-all">https://benjamin816.github.io</code>
+                    <div className="flex items-center gap-1 bg-slate-100 p-1.5 rounded">
+                      <code className="text-[9px] break-all font-mono flex-1 overflow-hidden truncate">{window.location.origin}</code>
+                      <button onClick={() => navigator.clipboard.writeText(window.location.origin)} className="p-1 text-slate-400 hover:text-indigo-600"><Copy size={12} /></button>
+                    </div>
                    </div>
                    <div>
                     <label className="text-[8px] font-bold text-slate-400 uppercase">Authorized Redirect URI:</label>
-                    <code className="block bg-slate-100 p-1 rounded text-[9px] break-all font-mono select-all">https://benjamin816.github.io/Vid-Trackr/</code>
+                    <div className="flex items-center gap-1 bg-slate-100 p-1.5 rounded">
+                      <code className="text-[9px] break-all font-mono flex-1 overflow-hidden truncate">{window.location.href}</code>
+                      <button onClick={() => navigator.clipboard.writeText(window.location.href)} className="p-1 text-slate-400 hover:text-indigo-600"><Copy size={12} /></button>
+                    </div>
                    </div>
+                   <p className="text-[9px] text-amber-600 bg-amber-50 p-2 rounded leading-tight">
+                     Note: If deploying to a subfolder like /Vid-Trackr/, you MUST include the full path in the Redirect URI.
+                   </p>
                 </div>
-              </div>
-            )}
+            </div>
           </div>
 
           <div className="flex bg-slate-100 p-1 rounded-lg">
