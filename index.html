@@ -23,42 +23,65 @@
       #root {
         height: 100%;
       }
-      .custom-scrollbar::-webkit-scrollbar {
-        width: 8px;
-        height: 10px;
+      /* Safety catcher for deployment errors */
+      #error-display {
+        display: none;
+        position: fixed;
+        inset: 0;
+        background: #fff1f2;
+        color: #991b1b;
+        padding: 2rem;
+        z-index: 9999;
+        font-family: monospace;
+        overflow: auto;
       }
-      .custom-scrollbar::-webkit-scrollbar-track {
-        background: #f1f5f9;
-      }
-      .custom-scrollbar::-webkit-scrollbar-thumb {
-        background: #cbd5e1;
-        border-radius: 10px;
-        border: 2px solid #f1f5f9;
-      }
-      .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-        background: #94a3b8;
-      }
-      @keyframes pulse-soft {
-        0%, 100% { opacity: 1; }
-        50% { opacity: 0.5; }
-      }
-      .animate-pulse-soft {
-        animation: pulse-soft 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+      .loading-screen {
+        position: fixed;
+        inset: 0;
+        background: white;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        z-index: 9998;
       }
     </style>
-  <script type="importmap">
-{
-  "imports": {
-    "@google/genai": "https://esm.sh/@google/genai@^1.37.0",
-    "react-dom/": "https://esm.sh/react-dom@^19.2.3/",
-    "react/": "https://esm.sh/react@^19.2.3/",
-    "react": "https://esm.sh/react@^19.2.3",
-    "lucide-react": "https://esm.sh/lucide-react@^0.562.0"
-  }
-}
-</script>
-</head>
+    <script>
+      // Global error handler to catch "Blank Screen" causes
+      window.onerror = function(msg, url, lineNo, columnNo, error) {
+        var display = document.getElementById('error-display');
+        if (display) {
+          display.style.display = 'block';
+          display.innerHTML = '<h1>Application Crash</h1>' +
+            '<p><strong>Error:</strong> ' + msg + '</p>' +
+            '<p><strong>File:</strong> ' + url + '</p>' +
+            '<p><strong>Line:</strong> ' + lineNo + ':' + columnNo + '</p>' +
+            '<pre>' + (error && error.stack ? error.stack : 'No stack trace') + '</pre>' +
+            '<p><em>Common fix: Ensure your OAuth Client ID is correct and process.env is handled.</em></p>';
+        }
+        return false;
+      };
+    </script>
+    <script type="importmap">
+    {
+      "imports": {
+        "@google/genai": "https://esm.sh/@google/genai@^1.37.0",
+        "react-dom/": "https://esm.sh/react-dom@^19.2.3/",
+        "react/": "https://esm.sh/react@^19.2.3/",
+        "react": "https://esm.sh/react@^19.2.3",
+        "lucide-react": "https://esm.sh/lucide-react@^0.562.0"
+      }
+    }
+    </script>
+  </head>
   <body class="h-full">
-    <div id="root" class="h-full"></div>
+    <div id="error-display"></div>
+    <div id="root" class="h-full">
+      <div class="loading-screen">
+        <div class="w-12 h-12 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin mb-4"></div>
+        <p class="font-bold text-slate-400 uppercase tracking-widest text-xs animate-pulse">Initializing Production HQ...</p>
+      </div>
+    </div>
+    <script type="module" src="./index.tsx"></script>
   </body>
 </html>

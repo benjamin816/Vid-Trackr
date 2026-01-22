@@ -15,7 +15,9 @@ import {
   CloudDownload,
   RefreshCw,
   AlertCircle,
-  HelpCircle
+  HelpCircle,
+  Globe,
+  Settings
 } from 'lucide-react';
 import { VideoCard, ViewMode, WorkflowStage, FunnelStage } from './types';
 import KanbanBoard from './components/KanbanBoard';
@@ -91,7 +93,6 @@ const App: React.FC = () => {
 
     const initGapi = async () => {
       try {
-        console.log("Initializing Google API Client...");
         // @ts-ignore
         gapi.load('client', async () => {
           // @ts-ignore
@@ -99,7 +100,6 @@ const App: React.FC = () => {
             discoveryDocs: [DISCOVERY_DOC],
           });
           setIsGapiLoaded(true);
-          console.log("GAPI Client Loaded Successfully.");
         });
 
         // @ts-ignore
@@ -108,11 +108,9 @@ const App: React.FC = () => {
           scope: SCOPES,
           callback: async (response: any) => {
             if (response.error !== undefined) {
-              console.error("Auth Callback Error:", response);
               setSyncStatus('error');
               return;
             }
-            console.log("Auth Successful. Refreshing Drive Sync...");
             await handleSyncWithDrive();
           },
         });
@@ -143,7 +141,6 @@ const App: React.FC = () => {
   const handleSyncWithDrive = async () => {
     setSyncStatus('connecting');
     try {
-      console.log("Checking for 'video_pipeline_data.json' in Google Drive...");
       // @ts-ignore
       const response = await gapi.client.drive.files.list({
         q: "name = 'video_pipeline_data.json' and trashed = false",
@@ -152,7 +149,6 @@ const App: React.FC = () => {
 
       const files = response.result.files;
       if (files && files.length > 0) {
-        console.log("Cloud file found. Downloading...");
         driveFileIdRef.current = files[0].id;
         // @ts-ignore
         const fileContent = await gapi.client.drive.files.get({
@@ -164,7 +160,6 @@ const App: React.FC = () => {
           setSyncStatus('synced');
         }
       } else {
-        console.log("No cloud file found. Creating new storage file...");
         await saveToDrive(cards, true);
       }
     } catch (err: any) {
@@ -232,14 +227,11 @@ const App: React.FC = () => {
       return;
     }
     if (tokenClientRef.current) {
-      console.log("Triggering Google OAuth login flow...");
       tokenClientRef.current.requestAccessToken({ prompt: 'consent' });
-    } else {
-      console.error("Auth client not initialized. Check GAPI scripts in index.html.");
     }
   };
 
-  // --- Card Handlers ---
+  // --- Handlers ---
   const addCards = useCallback((newCards: VideoCard[]) => setCards(prev => [...prev, ...newCards]), []);
   const updateCard = useCallback((updatedCard: VideoCard) => setCards(prev => prev.map(c => c.id === updatedCard.id ? updatedCard : c)), []);
   const deleteCardToTrash = useCallback((id: string) => {
@@ -316,7 +308,7 @@ const App: React.FC = () => {
               className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-[11px] font-bold uppercase transition-all shadow-sm ${
                 syncStatus === 'synced' ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' : 
                 syncStatus === 'syncing' ? 'bg-blue-50 text-blue-600 border border-blue-100' :
-                syncStatus === 'error' ? 'bg-rose-50 text-rose-600 border border-rose-100' : 'bg-slate-100 text-slate-500 hover:text-indigo-600'
+                (syncStatus === 'error' || syncStatus === 'unauthorized') ? 'bg-rose-50 text-rose-600 border border-rose-100' : 'bg-slate-100 text-slate-500 hover:text-indigo-600'
               }`}
             >
               {syncStatus === 'synced' && <Cloud size={16} />}
@@ -330,12 +322,22 @@ const App: React.FC = () => {
               </span>
             </button>
             
-            {(syncStatus === 'error' || syncStatus === 'unauthorized') && (
-              <div className="absolute top-full right-0 mt-2 w-64 bg-white p-4 rounded-xl shadow-2xl border border-slate-200 z-50 invisible group-hover:visible transition-all">
-                <p className="text-xs font-bold text-rose-600 mb-2 flex items-center gap-2"><HelpCircle size={14} /> Connection Help</p>
-                <p className="text-[10px] leading-relaxed text-slate-500">
-                  If you see "Invalid Request," ensure your app's current URL is added to the <strong>Authorized JavaScript Origins</strong> in your Google Cloud Console for Client ID: <code className="bg-slate-100 p-0.5 rounded text-[8px] break-all">{CLIENT_ID}</code>
+            {(syncStatus === 'error' || syncStatus === 'unauthorized' || syncStatus === 'disconnected') && (
+              <div className="absolute top-full right-0 mt-2 w-72 bg-white p-4 rounded-xl shadow-2xl border border-slate-200 z-50 invisible group-hover:visible transition-all">
+                <p className="text-xs font-bold text-indigo-600 mb-2 flex items-center gap-2"><Globe size={14} /> Security Whitelist</p>
+                <p className="text-[10px] leading-relaxed text-slate-500 mb-3">
+                  Google blocks sign-ins unless your URL is whitelisted in your Cloud Console.
                 </p>
+                <div className="space-y-2">
+                   <div>
+                    <label className="text-[8px] font-bold text-slate-400 uppercase">Authorized Origin:</label>
+                    <code className="block bg-slate-100 p-1 rounded text-[9px] break-all font-mono select-all">https://benjamin816.github.io</code>
+                   </div>
+                   <div>
+                    <label className="text-[8px] font-bold text-slate-400 uppercase">Authorized Redirect URI:</label>
+                    <code className="block bg-slate-100 p-1 rounded text-[9px] break-all font-mono select-all">https://benjamin816.github.io/Vid-Trackr/</code>
+                   </div>
+                </div>
               </div>
             )}
           </div>

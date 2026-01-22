@@ -22,6 +22,15 @@ import { VideoCard, WorkflowStage, FunnelStage } from '../types';
 import { WORKFLOW_STAGES, FUNNEL_CONFIG } from '../constants';
 import { GoogleGenAI } from "@google/genai";
 
+// Safe check for process.env
+const getApiKey = () => {
+  try {
+    return typeof process !== 'undefined' && process.env ? process.env.API_KEY : null;
+  } catch (e) {
+    return null;
+  }
+};
+
 interface CardModalProps {
   card: VideoCard;
   isOpen: boolean;
@@ -58,11 +67,13 @@ const CardModal: React.FC<CardModalProps> = ({ card, isOpen, onClose, onUpdate, 
   }, [edited.inspirationLinks]);
 
   const autoFetchMetadata = async (index: number, url: string) => {
-    if (!process.env.API_KEY) return;
+    const apiKey = getApiKey();
+    if (!apiKey) return;
+    
     setFetchingIndices(prev => new Set(prev).add(index));
     fetchedUrls.current.add(url);
     try {
-      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+      const ai = new GoogleGenAI({ apiKey });
       const prompt = `Find the exact video title and a thumbnail URL for this YouTube video: ${url}. Return ONLY a JSON object: {"title": "String", "thumbnail": "String"}`;
       const response = await ai.models.generateContent({
         model: 'gemini-3-flash-preview',
@@ -92,10 +103,15 @@ const CardModal: React.FC<CardModalProps> = ({ card, isOpen, onClose, onUpdate, 
   };
 
   const generateAIOutline = async () => {
-    if (!process.env.API_KEY) return;
+    const apiKey = getApiKey();
+    if (!apiKey) {
+      alert("AI features require an API_KEY environment variable.");
+      return;
+    }
+
     setIsGenerating(true);
     try {
-      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+      const ai = new GoogleGenAI({ apiKey });
       const prompt = `Create a YouTube script outline for a real estate video. Title: "${edited.title}". Funnel: ${edited.funnelStage}. Format: ${edited.formatType}. Include a hook, 4 main points, and a CTA. Use Markdown.`;
       const response = await ai.models.generateContent({ 
         model: 'gemini-3-pro-preview', 
