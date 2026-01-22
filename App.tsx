@@ -18,7 +18,9 @@ import {
   HelpCircle,
   Globe,
   Settings,
-  Copy
+  Copy,
+  Terminal,
+  ShieldCheck
 } from 'lucide-react';
 import { VideoCard, ViewMode, WorkflowStage, FunnelStage } from './types.ts';
 import KanbanBoard from './components/KanbanBoard.tsx';
@@ -29,16 +31,16 @@ import IdeaInput from './components/IdeaInput.tsx';
 import CardModal from './components/CardModal.tsx';
 
 /**
- * CLIENT ID CONFIGURATION
- * Note: If you receive a 400 error, ensure your Google Cloud Console project
- * has the "Authorized JavaScript Origins" set to exactly: https://benjamin816.github.io
+ * PRODUCTION CLIENT ID
+ * IMPORTANT: You must add "https://benjamin816.github.io" to your 
+ * Authorized JavaScript Origins in the Google Cloud Console.
  */
 const CLIENT_ID = "979572069887-6c96876re4v9udofbpqbfmqjru2q91q3.apps.googleusercontent.com";
 
 const DISCOVERY_DOC = 'https://www.googleapis.com/discovery/v1/apis/drive/v3/rest';
 const SCOPES = 'https://www.googleapis.com/auth/drive.file';
 
-type SyncStatus = 'disconnected' | 'connecting' | 'synced' | 'syncing' | 'error' | 'unauthorized';
+type SyncStatus = 'disconnected' | 'connecting' | 'synced' | 'syncing' | 'error' | 'unauthorized' | 'auth_fail';
 
 const App: React.FC = () => {
   const [cards, setCards] = useState<VideoCard[]>([]);
@@ -96,7 +98,6 @@ const App: React.FC = () => {
 
     const initGapi = async () => {
       try {
-        // Wait for gapi and google (GIS) to be available on window
         const checkLibraries = setInterval(() => {
           // @ts-ignore
           if (window.gapi && window.google && window.google.accounts) {
@@ -115,7 +116,8 @@ const App: React.FC = () => {
               });
               setIsGapiLoaded(true);
             } catch (initErr) {
-              console.error("GAPI Client Init Error:", initErr);
+              console.error("GAPI Init Error:", initErr);
+              setSyncStatus('error');
             }
           });
 
@@ -126,7 +128,7 @@ const App: React.FC = () => {
             callback: async (response: any) => {
               if (response.error !== undefined) {
                 console.error("GIS Auth Error:", response);
-                setSyncStatus('error');
+                setSyncStatus('auth_fail');
                 return;
               }
               await handleSyncWithDrive();
@@ -134,7 +136,7 @@ const App: React.FC = () => {
           });
         };
       } catch (err) {
-        console.error("GAPI initialization sequence failed:", err);
+        console.error("GAPI sequence failed:", err);
       }
     };
 
@@ -158,10 +160,7 @@ const App: React.FC = () => {
   }, [cards, syncStatus]);
 
   const handleSyncWithDrive = async () => {
-    if (!isGapiLoaded) {
-      setSyncStatus('error');
-      return;
-    }
+    if (!isGapiLoaded) return;
     setSyncStatus('connecting');
     try {
       // @ts-ignore
@@ -186,12 +185,9 @@ const App: React.FC = () => {
         await saveToDrive(cards, true);
       }
     } catch (err: any) {
-      console.error("Cloud Sync Operation Failed:", err);
-      if (err.status === 401 || err.status === 403) {
-        setSyncStatus('unauthorized');
-      } else {
-        setSyncStatus('error');
-      }
+      console.error("Cloud Sync Failed:", err);
+      if (err.status === 401 || err.status === 403) setSyncStatus('unauthorized');
+      else setSyncStatus('error');
     }
   };
 
@@ -203,18 +199,10 @@ const App: React.FC = () => {
       const delimiter = "\r\n--" + boundary + "\r\n";
       const close_delim = "\r\n--" + boundary + "--";
 
-      const metadata = {
-        'name': 'video_pipeline_data.json',
-        'mimeType': 'application/json',
-      };
-
+      const metadata = { 'name': 'video_pipeline_data.json', 'mimeType': 'application/json' };
       const multipartRequestBody =
-        delimiter +
-        'Content-Type: application/json\r\n\r\n' +
-        JSON.stringify(metadata) +
-        delimiter +
-        'Content-Type: application/json\r\n\r\n' +
-        JSON.stringify(data) +
+        delimiter + 'Content-Type: application/json\r\n\r\n' + JSON.stringify(metadata) +
+        delimiter + 'Content-Type: application/json\r\n\r\n' + JSON.stringify(data) +
         close_delim;
 
       if (isNew || !driveFileIdRef.current) {
@@ -245,14 +233,10 @@ const App: React.FC = () => {
   };
 
   const connectToDrive = () => {
-    if (CLIENT_ID.includes("YOUR_CLIENT_ID")) {
-      alert("⚠️ Action Required: Update the CLIENT_ID in App.tsx to enable cloud sync.");
-      return;
-    }
     if (tokenClientRef.current) {
       tokenClientRef.current.requestAccessToken({ prompt: 'consent' });
     } else {
-      alert("Google Identity Services not initialized. Please check your internet connection.");
+      alert("Authentication system still loading. Please wait 5 seconds.");
     }
   };
 
@@ -300,7 +284,7 @@ const App: React.FC = () => {
   const activeCard = useMemo(() => cards.find(c => c.id === selectedCardId), [cards, selectedCardId]);
 
   return (
-    <div className="flex flex-col h-screen overflow-hidden bg-slate-50 text-slate-900">
+    <div className="flex flex-col h-screen overflow-hidden bg-slate-50 text-slate-900 font-inter">
       <header className="h-16 px-6 bg-white border-b border-slate-200 flex items-center justify-between shrink-0 shadow-sm z-10">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center text-white shadow-lg shadow-indigo-100">
@@ -318,7 +302,7 @@ const App: React.FC = () => {
             <input 
               type="text" 
               placeholder="Search ideas, locations..." 
-              className="w-full pl-10 pr-4 py-2 bg-slate-100 border-none rounded-full text-sm focus:ring-2 focus:ring-indigo-500 transition-all" 
+              className="w-full pl-10 pr-4 py-2 bg-slate-100 border-none rounded-full text-sm focus:ring-2 focus:ring-indigo-500 transition-all outline-none" 
               value={searchQuery} 
               onChange={(e) => setSearchQuery(e.target.value)} 
             />
@@ -326,51 +310,48 @@ const App: React.FC = () => {
         </div>
 
         <div className="flex items-center gap-4">
-          {/* Cloud Sync Status Button */}
           <div className="relative group">
             <button 
               onClick={connectToDrive}
               className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-[11px] font-bold uppercase transition-all shadow-sm ${
                 syncStatus === 'synced' ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' : 
                 syncStatus === 'syncing' ? 'bg-blue-50 text-blue-600 border border-blue-100' :
-                (syncStatus === 'error' || syncStatus === 'unauthorized') ? 'bg-rose-50 text-rose-600 border border-rose-100' : 'bg-slate-100 text-slate-500 hover:text-indigo-600'
+                (syncStatus === 'error' || syncStatus === 'auth_fail') ? 'bg-rose-50 text-rose-600 border border-rose-100' : 'bg-slate-100 text-slate-500 hover:text-indigo-600'
               }`}
             >
-              {syncStatus === 'synced' && <Cloud size={16} />}
+              {syncStatus === 'synced' && <ShieldCheck size={16} />}
               {syncStatus === 'syncing' && <RefreshCw size={16} className="animate-spin" />}
               {syncStatus === 'disconnected' && <CloudOff size={16} />}
-              {syncStatus === 'connecting' && <CloudDownload size={16} className="animate-pulse-soft" />}
-              {(syncStatus === 'error' || syncStatus === 'unauthorized') && <AlertCircle size={16} />}
+              {syncStatus === 'connecting' && <CloudDownload size={16} className="animate-pulse" />}
+              {(syncStatus === 'error' || syncStatus === 'auth_fail') && <AlertCircle size={16} />}
               <span className="hidden sm:inline">
                 {syncStatus === 'synced' ? 'Cloud Synced' : syncStatus === 'syncing' ? 'Saving...' : 
-                 syncStatus === 'unauthorized' ? 'Verify Auth' : 'Connect Drive'}
+                 syncStatus === 'auth_fail' ? 'Auth Conflict' : 'Sync Board'}
               </span>
             </button>
             
-            <div className="absolute top-full right-0 mt-2 w-72 bg-white p-4 rounded-xl shadow-2xl border border-slate-200 z-50 invisible group-hover:visible transition-all">
-                <p className="text-xs font-bold text-indigo-600 mb-2 flex items-center gap-2"><Globe size={14} /> OAuth Diagnostic</p>
-                <p className="text-[10px] leading-relaxed text-slate-500 mb-3">
-                  Google blocks requests if the Origin/Redirect doesn't match EXACTLY. Copy these to your Console:
-                </p>
-                <div className="space-y-3">
-                   <div>
-                    <label className="text-[8px] font-bold text-slate-400 uppercase">Authorized Origin:</label>
-                    <div className="flex items-center gap-1 bg-slate-100 p-1.5 rounded">
-                      <code className="text-[9px] break-all font-mono flex-1 overflow-hidden truncate">{window.location.origin}</code>
-                      <button onClick={() => navigator.clipboard.writeText(window.location.origin)} className="p-1 text-slate-400 hover:text-indigo-600"><Copy size={12} /></button>
-                    </div>
-                   </div>
-                   <div>
-                    <label className="text-[8px] font-bold text-slate-400 uppercase">Authorized Redirect URI:</label>
-                    <div className="flex items-center gap-1 bg-slate-100 p-1.5 rounded">
-                      <code className="text-[9px] break-all font-mono flex-1 overflow-hidden truncate">{window.location.href}</code>
-                      <button onClick={() => navigator.clipboard.writeText(window.location.href)} className="p-1 text-slate-400 hover:text-indigo-600"><Copy size={12} /></button>
-                    </div>
-                   </div>
-                   <p className="text-[9px] text-amber-600 bg-amber-50 p-2 rounded leading-tight">
-                     Note: If deploying to a subfolder like /Vid-Trackr/, you MUST include the full path in the Redirect URI.
-                   </p>
+            {/* Trouble Shooting Tooltip */}
+            <div className="absolute top-full right-0 mt-2 w-80 bg-slate-900 text-white p-5 rounded-2xl shadow-2xl z-50 invisible group-hover:visible opacity-0 group-hover:opacity-100 transition-all scale-95 group-hover:scale-100 origin-top-right">
+                <div className="flex items-center gap-2 mb-3 text-indigo-400">
+                  <Terminal size={16} />
+                  <p className="text-xs font-bold uppercase tracking-widest">Auth Diagnostics</p>
                 </div>
+                
+                {syncStatus === 'auth_fail' ? (
+                  <div className="space-y-3">
+                    <p className="text-[11px] text-slate-300 leading-relaxed bg-rose-500/10 p-3 rounded-xl border border-rose-500/20">
+                      <strong>ERROR 400:</strong> Google rejected the request. Ensure your Cloud Console has this Origin:
+                    </p>
+                    <div className="bg-black/50 p-2 rounded-lg flex items-center justify-between">
+                      <code className="text-[10px] text-indigo-300 truncate">{window.location.origin}</code>
+                      <button onClick={() => navigator.clipboard.writeText(window.location.origin)} className="p-1 hover:text-indigo-400 transition-colors"><Copy size={12} /></button>
+                    </div>
+                  </div>
+                ) : (
+                  <p className="text-[10px] text-slate-400 leading-relaxed">
+                    Connect to your Google Workspace to enable team-wide sync. Data is stored securely in your private Drive folder.
+                  </p>
+                )}
             </div>
           </div>
 
@@ -385,7 +366,7 @@ const App: React.FC = () => {
             onClick={() => { setInputDefaultStatus(undefined); setIsInputOpen(true); }} 
             className="flex items-center gap-2 bg-slate-900 hover:bg-black text-white px-5 py-2.5 rounded-xl text-sm font-bold transition-all shadow-lg shadow-slate-200 active:scale-95"
           >
-            <Plus size={18} /> New Idea
+            <Plus size={18} /> New Concept
           </button>
         </div>
       </header>

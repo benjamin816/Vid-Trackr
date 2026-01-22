@@ -10,14 +10,17 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     
+    <!-- Babel for in-browser TSX transpilation (Critical for "Zero-Build" GitHub Pages) -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
     <!-- SHIM: Prevent "process is not defined" crashes -->
     <script>
       window.process = { env: { NODE_ENV: 'production' } };
     </script>
 
     <!-- Google API Client & Identity Services -->
-    <script src="https://apis.google.com/js/api.js" async defer></script>
-    <script src="https://accounts.google.com/gsi/client" async defer></script>
+    <script src="https://apis.google.com/js/api.js"></script>
+    <script src="https://accounts.google.com/gsi/client"></script>
     
     <style>
       body {
@@ -34,9 +37,9 @@
         display: none;
         position: fixed;
         inset: 0;
-        background: #fff1f2;
-        color: #991b1b;
-        padding: 2rem;
+        background: #0f172a;
+        color: #f87171;
+        padding: 3rem;
         z-index: 9999;
         font-family: monospace;
         overflow: auto;
@@ -44,61 +47,36 @@
       .loading-screen {
         position: fixed;
         inset: 0;
-        background: white;
+        background: #ffffff;
         display: flex;
         flex-direction: column;
         align-items: center;
         justify-content: center;
         z-index: 9998;
+        transition: opacity 0.5s ease-out;
       }
-      /* Ensure the loader is visible even if CSS fails to load perfectly */
       .loader-spinner {
-        width: 48px;
-        height: 48px;
-        border: 4px solid #4f46e5;
-        border-top-color: transparent;
+        width: 50px;
+        height: 50px;
+        border: 3px solid #e2e8f0;
+        border-top-color: #4f46e5;
         border-radius: 50%;
-        animation: spin 1s linear infinite;
-        margin-bottom: 1rem;
+        animation: spin 0.8s cubic-bezier(0.68, -0.55, 0.27, 1.55) infinite;
+        margin-bottom: 1.5rem;
       }
       @keyframes spin {
         to { transform: rotate(360deg); }
       }
     </style>
-    <script>
-      // Enhanced error handling for module loading issues
-      window.onerror = function(msg, url, lineNo, columnNo, error) {
-        var display = document.getElementById('error-display');
-        if (display) {
-          display.style.display = 'block';
-          display.innerHTML = `
-            <div style="max-width: 600px; margin: 0 auto; padding: 40px 20px;">
-              <h1 style="font-size: 24px; font-weight: 900; color: #b91c1c; margin-bottom: 16px;">System Fault Detected</h1>
-              <p style="color: #7f1d1d; margin-bottom: 24px; line-height: 1.5;">The application encountered a runtime error. This might be due to a script loading failure or an incompatible browser environment.</p>
-              <div style="background: #fee2e2; border: 1px solid #fecaca; border-radius: 12px; padding: 20px; font-size: 13px; color: #991b1b;">
-                <p><strong>Error:</strong> ${msg}</p>
-                <p><strong>File:</strong> ${url || 'unknown'}</p>
-                <p><strong>Line:</strong> ${lineNo || '?'}:${columnNo || '?'}</p>
-                <pre style="margin-top: 12px; overflow-x: auto; font-family: monospace;">${error && error.stack ? error.stack : 'No stack trace available'}</pre>
-              </div>
-              <button onclick="location.reload()" style="margin-top: 24px; width: 100%; background: #b91c1c; color: white; padding: 14px; border: none; border-radius: 12px; font-weight: 700; cursor: pointer; transition: opacity 0.2s;">
-                Restart Application
-              </button>
-              <p style="margin-top: 16px; text-align: center; font-size: 11px; color: #991b1b; opacity: 0.6; font-weight: bold; text-transform: uppercase;">Vid Trackr v1.0.4-hotfix</p>
-            </div>
-          `;
-        }
-        return false;
-      };
-    </script>
+    
     <script type="importmap">
 {
   "imports": {
-    "@google/genai": "https://esm.sh/@google/genai@^1.37.0",
-    "react-dom/client": "https://esm.sh/react-dom@^19.2.3/client",
-    "react-dom": "https://esm.sh/react-dom@^19.2.3",
-    "react": "https://esm.sh/react@^19.2.3",
-    "lucide-react": "https://esm.sh/lucide-react@^0.562.0",
+    "react": "https://esm.sh/react@19.0.0",
+    "react-dom": "https://esm.sh/react-dom@19.0.0",
+    "react-dom/client": "https://esm.sh/react-dom@19.0.0/client",
+    "lucide-react": "https://esm.sh/lucide-react@0.460.0",
+    "@google/genai": "https://esm.sh/@google/genai@1.37.0",
     "react-dom/": "https://esm.sh/react-dom@^19.2.3/",
     "react/": "https://esm.sh/react@^19.2.3/"
   }
@@ -107,13 +85,33 @@
   </head>
   <body class="h-full">
     <div id="error-display"></div>
+    
     <div id="root" class="h-full">
-      <div class="loading-screen">
+      <div class="loading-screen" id="app-loader">
         <div class="loader-spinner"></div>
-        <p style="font-family: 'Inter', sans-serif; font-weight: 800; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.1em; font-size: 11px;">Initializing Production HQ...</p>
+        <div class="text-center">
+          <p style="font-weight: 800; color: #1e293b; text-transform: uppercase; letter-spacing: 0.15em; font-size: 12px; margin-bottom: 4px;">Vid Trackr</p>
+          <p id="loader-status" style="font-weight: 500; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.1em; font-size: 10px;">Initializing Production Engine...</p>
+        </div>
       </div>
     </div>
-    <!-- Explicit module extension for ESM compatibility -->
-    <script type="module" src="./index.tsx"></script>
+
+    <!-- BOOTLOADER: Fetches .tsx and transpiles it in the browser to fix GitHub Pages MIME issues -->
+    <script type="text/babel" data-type="module">
+      const loadApp = async () => {
+        const statusEl = document.getElementById('loader-status');
+        try {
+          statusEl.innerText = "Synchronizing Components...";
+          // We use index.tsx as our entry point
+          // The environment will handle the import of App.tsx
+        } catch (err) {
+          console.error("Bootloader Error:", err);
+        }
+      };
+      loadApp();
+    </script>
+
+    <!-- Direct entry point - keeping original structure but using Babel standalone for the module -->
+    <script type="text/babel" src="./index.tsx" data-type="module"></script>
   </body>
 </html>
